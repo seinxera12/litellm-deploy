@@ -1,0 +1,6 @@
+.env
+*.env
+model-cache/
+**/volumes/
+__pycache__/
+

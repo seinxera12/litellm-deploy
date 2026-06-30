@@ -1,0 +1,6 @@
+.venv
+*.env
+model-cache/
+**/volumes/
+__pycache__/
+venv
