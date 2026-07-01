@@ -59,10 +59,32 @@ services:
     ports: ["8002:80"]
 
     networks: [qfind-net]
+  
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.40.0  
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "4000:4000"
+    env_file: [.env]
+    depends_on:
+      - litellm-db
+      - litellm-redis
+    networks: [qfind-net]
 
+  qdrant:
+    image: qdrant/qdrant:v1.9.0    # pin a specific version
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "6333:6333"   # HTTP API
+      - "6334:6334"   # gRPC (optional, can leave out if not used)
+    networks: [qfind-net]
 
 networks:
   qfind-net:
 
 volumes:
   pgdata:
+  qdrant-data:
