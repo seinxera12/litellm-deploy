@@ -1,0 +1,23 @@
+model_list:
+  - model_name: qfind-chat
+    litellm_params:
+      model: openai/qfind-chat       # the stable served name vLLM uses
+      api_base: http://vllm-chat:8000/v1
+      api_key: "none"                # self-hosted, no upstream key
+
+  - model_name: qfind-embed
+    litellm_params:
+      model: openai/qfind-embed
+      api_base: http://tei-embed:80
+      api_key: "none"
+
+  - model_name: qfind-rerank
+    litellm_params:
+      model: openai/qfind-rerank
+      api_base: http://tei-rerank:80
+      api_key: "none"
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
