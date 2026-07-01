@@ -36,6 +36,30 @@ services:
             - { driver: nvidia, count: all, capabilities: [gpu] }
     networks: [qfind-net]
 
+  tei-embed:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+      
+    command: ["--model-id", "/models/bge-m3"]
+
+    volumes:
+      - ./model-cache/bge-m3:/models/bge-m3:ro
+        
+    ports: ["8001:80"]
+
+    networks: [qfind-net]
+
+  tei-rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+
+    command: ["--model-id", "/models/bge-reranker-v2-m3"]
+
+    volumes:
+      - ./model-cache/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
+      
+    ports: ["8002:80"]
+
+    networks: [qfind-net]
+
 
 networks:
   qfind-net:
