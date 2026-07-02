@@ -54,7 +54,7 @@ services:
     command: ["--model-id", "/models/bge-reranker-v2-m3"]
 
     volumes:
-      - ./model-cache/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
+      - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
       
     ports: ["8002:80"]
 
@@ -74,7 +74,7 @@ services:
     networks: [qfind-net]
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0    # pin a specific version
+    image: qdrant/qdrant:latest    # pin a specific version
     volumes:
       - qdrant-data:/qdrant/storage
     ports:
