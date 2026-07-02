@@ -4,3 +4,4 @@ model-cache/
 **/volumes/
 __pycache__/
 venv
+tmp

@@ -424,7 +424,7 @@ python3 deployment/scripts/embed_pipeline.py /tmp/test_doc.txt
 
 ### Check
 ```bash
-curl "http://localhost:6333/collections/qfind_docs/points/count"
+curl -X POST "http://localhost:6333/collections/qfind_docs/points/count" -H "Content-Type: application/json" -d '{}'
 ```
 → `"count"` is > 0, meaning points (chunk vectors) were inserted.
 
@@ -463,7 +463,6 @@ Usage: python retrieval_pipeline.py "your query here"
 """
 import sys, requests
 from qdrant_client import QdrantClient
-from qdrant_client.models import SearchRequest, NamedVector
 
 TEI_EMBED_URL  = "http://localhost:8001"
 TEI_RERANK_URL = "http://localhost:8002"
@@ -484,15 +483,16 @@ def embed_query(query: str) -> list[float]:
 
 def qdrant_search(query_vec: list[float], top_k: int) -> list[dict]:
     """Stage 2: dense vector search in Qdrant."""
-    results = client.search(
+    response = client.query_points(
         collection_name=COLLECTION,
-        query_vector=NamedVector(name="dense", vector=query_vec),
+        query=query_vec,        # plain vector; name is selected via `using`
+        using="dense",          # named vector to query against
         limit=top_k,
         with_payload=True,
     )
     return [
         {"id": str(r.id), "score": r.score, "payload": r.payload}
-        for r in results
+        for r in response.points   # QueryResponse wraps results in .points
     ]
 
 
