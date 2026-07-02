@@ -1,0 +1,140 @@
+# Production Compose — RTX 5090 server
+# Usage: docker compose -f docker-compose.prod.yml up -d
+# All model-cache paths are absolute so the file is unambiguous when referenced with -f
+
+services:
+
+  # ─── Databases ──────────────────────────────────────────────────────────────
+
+  litellm-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [qfind-net]
+
+  litellm-redis:
+    image: redis:7
+    restart: unless-stopped
+    networks: [qfind-net]
+
+  # ─── Inference engines ──────────────────────────────────────────────────────
+
+  vllm-chat:
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    command: >
+      --model /models/qwen2.5-14b-instruct
+      --quantization fp8
+      --served-model-name qfind-chat
+      --gpu-memory-utilization 0.70
+      --max-model-len 16384
+      --tensor-parallel-size 1
+      --enable-prefix-caching
+    volumes:
+      - ./model-cache/qwen2.5-14b-instruct:/models/qwen2.5-14b-instruct:ro
+    ports:
+      - "127.0.0.1:8000:8000"   # bind to loopback only — Caddy/LiteLLM reach it via qfind-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: all, capabilities: [gpu] }
+    networks: [qfind-net]
+
+  tei-embed:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.5   # GPU image (no cpu- prefix)
+    restart: unless-stopped
+    command:
+      - "--model-id"
+      - "/models/bge-m3"
+      - "--max-batch-tokens"
+      - "16384"
+      - "--max-concurrent-requests"
+      - "128"
+    volumes:
+      - ./model-cache/bge-m3:/models/bge-m3:ro
+    ports:
+      - "127.0.0.1:8001:80"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: all, capabilities: [gpu] }
+    networks: [qfind-net]
+
+  tei-rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.5   # GPU image
+    restart: unless-stopped
+    command:
+      - "--model-id"
+      - "/models/bge-reranker-v2-m3"
+      - "--max-batch-tokens"
+      - "8192"
+      - "--max-concurrent-requests"
+      - "64"
+    volumes:
+      - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
+    ports:
+      - "127.0.0.1:8002:80"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: all, capabilities: [gpu] }
+    networks: [qfind-net]
+
+  # ─── Gateway ────────────────────────────────────────────────────────────────
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.40.0
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:4000:4000"   # loopback only — Caddy proxies externally
+    env_file: [.env]
+    depends_on:
+      - litellm-db
+      - litellm-redis
+    networks: [qfind-net]
+
+  # ─── Vector store ───────────────────────────────────────────────────────────
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    networks: [qfind-net]
+
+  # ─── Reverse proxy (HTTPS) ──────────────────────────────────────────────────
+
+  caddy:
+    image: caddy:2.9.1-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [qfind-net]
+
+networks:
+  qfind-net:
+
+volumes:
+  pgdata:
+  qdrant-data:
+  caddy-data:     # persists TLS certs — never delete this volume
+  caddy-config:
