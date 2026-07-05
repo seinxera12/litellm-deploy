@@ -13,7 +13,7 @@ model_list:
 
   - model_name: qfind-rerank
     litellm_params:
-      model: openai/qfind-rerank
+      model: huggingface/qfind-rerank
       api_base: http://tei-rerank:80
       api_key: "none"
 
