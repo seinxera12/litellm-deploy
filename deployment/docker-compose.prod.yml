@@ -27,6 +27,9 @@ services:
   vllm-chat:
     image: vllm/vllm-openai:v0.17.0
     restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICE: "1"
     command: >
       --model /models/qwen2.5-14b-instruct
       --quantization fp8
@@ -54,7 +57,7 @@ services:
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
         
-    ports: ["8001:80"]
+    ports: ["127.0.0.1:8001:80"]
 
     networks: [qfind-net]
 
@@ -66,14 +69,14 @@ services:
     volumes:
       - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
       
-    ports: ["8002:80"]
+    ports: ["127.0.0.1:8002:80"]
 
     networks: [qfind-net]
 
   # ─── Gateway ────────────────────────────────────────────────────────────────
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.40.0
+    image: ghcr.io/berriai/litellm:latest
     restart: unless-stopped
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     volumes:
