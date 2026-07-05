@@ -27,6 +27,9 @@ services:
   vllm-chat:
     image: vllm/vllm-openai:v0.17.0
     restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICE: "1"
     command: >
       --model /models/qwen2.5-14b-instruct
       --quantization fp8
@@ -47,51 +50,33 @@ services:
     networks: [qfind-net]
 
   tei-embed:
-    image: ghcr.io/huggingface/text-embeddings-inference:1.5   # GPU image (no cpu- prefix)
-    restart: unless-stopped
-    command:
-      - "--model-id"
-      - "/models/bge-m3"
-      - "--max-batch-tokens"
-      - "16384"
-      - "--max-concurrent-requests"
-      - "128"
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+      
+    command: ["--model-id", "/models/bge-m3"]
+
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
-    ports:
-      - "127.0.0.1:8001:80"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - { driver: nvidia, count: all, capabilities: [gpu] }
+        
+    ports: ["127.0.0.1:8001:80"]
+
     networks: [qfind-net]
 
   tei-rerank:
-    image: ghcr.io/huggingface/text-embeddings-inference:1.5   # GPU image
-    restart: unless-stopped
-    command:
-      - "--model-id"
-      - "/models/bge-reranker-v2-m3"
-      - "--max-batch-tokens"
-      - "8192"
-      - "--max-concurrent-requests"
-      - "64"
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+
+    command: ["--model-id", "/models/bge-reranker-v2-m3"]
+
     volumes:
       - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
-    ports:
-      - "127.0.0.1:8002:80"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - { driver: nvidia, count: all, capabilities: [gpu] }
+      
+    ports: ["127.0.0.1:8002:80"]
+
     networks: [qfind-net]
 
   # ─── Gateway ────────────────────────────────────────────────────────────────
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.40.0
+    image: ghcr.io/berriai/litellm:latest
     restart: unless-stopped
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     volumes:
@@ -107,7 +92,7 @@ services:
   # ─── Vector store ───────────────────────────────────────────────────────────
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:latest
     restart: unless-stopped
     volumes:
       - qdrant-data:/qdrant/storage
