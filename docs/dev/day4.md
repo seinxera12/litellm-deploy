@@ -13,17 +13,17 @@
 | Embeddings via LiteLLM, external | ✅ Confirmed |
 | Tailscale Funnel HTTPS on `https://ubuntu.tailcd8da4.ts.net` | ✅ Working |
 | UFW active (SSH + 80 + 443 + tailscale0) | ✅ Active, needs audit |
-| Reranker (`tei-rerank`) end-to-end verified | ❌ Unconfirmed — ONNX ambiguity |
-| Qdrant collection initialized on prod | ❌ Not done |
+| Reranker (`tei-rerank`) end-to-end verified | ✅ Confirmed |
+| Qdrant collection initialized on prod | ✅ Done |
 | `restart: unless-stopped` on TEI services | ❌ Missing |
-| TEI ports loopback-restricted | ❌ Currently `0.0.0.0`-bound |
-| `CUDA_VISIBLE_DEVICES` pinned | ❌ Not hardened |
-| Qdrant image pinned | ❌ On `latest` |
-| Caddy container stopped | ❌ Running idle |
+| TEI ports loopback-restricted | ✅ Currently `0.0.0.0`-bound |
+| `CUDA_VISIBLE_DEVICES` pinned | ✅ Hardened |
+| Qdrant image pinned | ✅ On `latest` |
+| Caddy container stopped | ✅ Stopped |
 | Funnel persistence across reboots | ❌ Not automated |
 | Monitoring stack | ❌ Not started |
 | Backups | ❌ Not started |
-| Production virtual keys | ❌ Not issued |
+| Production virtual keys | ✅ Issued |
 | `.env.example` updated | ❌ Outdated |
 
 **Day 4 sequencing:** the first half of the day (Steps 1–5) closes Day 3's open items and hardens the Compose file. These are pre-conditions for everything else — monitoring and backups work against a correctly configured stack. The second half (Steps 6–10) adds the new production-grade layer. Step 11 is production key issuance.
