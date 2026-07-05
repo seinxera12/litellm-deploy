@@ -47,45 +47,27 @@ services:
     networks: [qfind-net]
 
   tei-embed:
-    image: ghcr.io/huggingface/text-embeddings-inference:1.5   # GPU image (no cpu- prefix)
-    restart: unless-stopped
-    command:
-      - "--model-id"
-      - "/models/bge-m3"
-      - "--max-batch-tokens"
-      - "16384"
-      - "--max-concurrent-requests"
-      - "128"
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+      
+    command: ["--model-id", "/models/bge-m3"]
+
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
-    ports:
-      - "127.0.0.1:8001:80"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - { driver: nvidia, count: all, capabilities: [gpu] }
+        
+    ports: ["8001:80"]
+
     networks: [qfind-net]
 
   tei-rerank:
-    image: ghcr.io/huggingface/text-embeddings-inference:1.5   # GPU image
-    restart: unless-stopped
-    command:
-      - "--model-id"
-      - "/models/bge-reranker-v2-m3"
-      - "--max-batch-tokens"
-      - "8192"
-      - "--max-concurrent-requests"
-      - "64"
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+
+    command: ["--model-id", "/models/bge-reranker-v2-m3"]
+
     volumes:
       - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
-    ports:
-      - "127.0.0.1:8002:80"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - { driver: nvidia, count: all, capabilities: [gpu] }
+      
+    ports: ["8002:80"]
+
     networks: [qfind-net]
 
   # ─── Gateway ────────────────────────────────────────────────────────────────
@@ -107,7 +89,7 @@ services:
   # ─── Vector store ───────────────────────────────────────────────────────────
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:latest
     restart: unless-stopped
     volumes:
       - qdrant-data:/qdrant/storage
