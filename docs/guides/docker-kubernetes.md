@@ -131,7 +131,7 @@ These layers are **stacked**. The filesystem you see inside a container is the u
 
 ---
 
-  
+ 
 
 ### Chapter 3 — The Dockerfile: Writing Good Blueprints
 
