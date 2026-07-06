@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
     environment:
       CUDA_DEVICE_ORDER: PCI_BUS_ID
-      CUDA_VISIBLE_DEVICE: "1"
+      CUDA_VISIBLE_DEVICES: "1"
     command: >
       --model /models/qwen2.5-14b-instruct
       --quantization fp8    
@@ -53,13 +53,14 @@ services:
     image: ghcr.io/speaches-ai/speaches:latest-cuda-12.6.3   # verify tag per the note above
     restart: unless-stopped
     environment:
+      HF_HOME: /home/ubuntu/.cache/huggingface
       CUDA_DEVICE_ORDER: PCI_BUS_ID
-      CUDA_VISIBLE_DEVICE: "1"        # A400 — dedicated, does not compete with vllm-chat on GPU 1
+      CUDA_VISIBLE_DEVICES: "1"        # A400 — dedicated, does not compete with vllm-chat on GPU 1
       WHISPER__MODEL: Systran/faster-whisper-large-v3
       WHISPER__INFERENCE_DEVICE: cuda
       WHISPER__COMPUTE_TYPE: float16
     volumes:
-      - ./model-cache/whisper-large-v3:/root/.cache/huggingface/hub/models--Systran--faster-whisper-large-v3:ro
+      - ./model-cache/hub:/home/ubuntu/.cache/huggingface/hub:ro
     ports:
       - "127.0.0.1:8003:8000"          # loopback only, same pattern as vLLM/TEI — LiteLLM reaches it via qfind-net
     deploy:
