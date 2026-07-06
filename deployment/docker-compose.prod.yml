@@ -49,6 +49,26 @@ services:
             - { driver: nvidia, count: all, capabilities: [gpu] }
     networks: [qfind-net]
 
+  stt-whisper:
+    image: ghcr.io/speaches-ai/speaches:latest-cuda-12.6.3   # verify tag per the note above
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICE: "1"        # A400 — dedicated, does not compete with vllm-chat on GPU 1
+      WHISPER__MODEL: Systran/faster-whisper-large-v3
+      WHISPER__INFERENCE_DEVICE: cuda
+      WHISPER__COMPUTE_TYPE: float16
+    volumes:
+      - ./model-cache/whisper-large-v3:/root/.cache/huggingface/hub/models--Systran--faster-whisper-large-v3:ro
+    ports:
+      - "127.0.0.1:8003:8000"          # loopback only, same pattern as vLLM/TEI — LiteLLM reaches it via qfind-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: all, capabilities: [gpu] }
+    networks: [qfind-net]
+
   tei-embed:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
       
