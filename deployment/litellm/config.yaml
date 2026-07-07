@@ -17,6 +17,12 @@ model_list:
       api_base: http://tei-rerank:80
       api_key: "none"
 
+  - model_name: qfind-stt
+    litellm_params:
+      model: openai/Systran/faster-whisper-large-v3
+      api_base: http://stt-whisper:8000/v1
+      api_key: "none"
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
