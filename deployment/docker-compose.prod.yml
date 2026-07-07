@@ -83,7 +83,7 @@ services:
       FW_MODEL: large-v3                  # resolves to Systran/faster-whisper-large-v3 — same repo/cache as speaches
       FW_DEVICE: cuda
       FW_COMPUTE_TYPE: float16
-      FW_BATCH_SIZE: "16"                 # default batch size; overridable per-request via the form body
+      FW_BATCH_SIZE: "8"                 # default batch size; overridable per-request via the form body
     volumes:
       - ./model-cache/hub:/home/ubuntu/.cache/huggingface/hub:ro   # reuse the already-downloaded large-v3 cache; same mount path as speaches, :ro
     ports:
