@@ -99,24 +99,54 @@ services:
 
   tei-embed:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
-      
-    command: ["--model-id", "/models/bge-m3"]
+    restart: unless-stopped
+
+    # Pin to CCD1 (frequency die, cores 8-15). Embed streams the full weight set
+    # each pass and won't fit any cache, so it prefers the higher clock. 8 physical
+    # cores only — SMT siblings (24-31) hurt dense GEMM.
+    cpuset: "8-15"
+    environment:
+      OMP_NUM_THREADS: "8"
+      RAYON_NUM_THREADS: "8"
+
+    command: ["--model-id", "/models/bge-m3",
+              "--auto-truncate", "--max-batch-tokens", "8192",
+              "--max-client-batch-size", "64", "--tokenization-workers", "4",
+              "--max-concurrent-requests", "64"]
 
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
-        
+      # NOTE: still fp32 ONNX. int8 (Change 2) is a follow-up — generate with
+      # optimum-cli, then overlay ./model-cache/bge-m3/onnx-int8/model.onnx here.
+
     ports: ["127.0.0.1:8001:80"]
 
     networks: [qfind-net]
 
   tei-rerank:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    restart: unless-stopped
 
-    command: ["--model-id", "/models/bge-reranker-v2-m3"]
+    # Pin to CCD0 (3D V-cache die, cores 0-7). The cross-encoder is memory-bound and
+    # benefits most from the 96 MB L3. Verify CCD0 is the V-cache die with `lscpu -C`
+    # (larger L3); if it's CCD1, swap this cpuset with tei-embed's.
+    cpuset: "0-7"
+    environment:
+      OMP_NUM_THREADS: "8"
+      RAYON_NUM_THREADS: "8"
+
+    command: ["--model-id", "/models/bge-reranker-v2-m3",
+              "--auto-truncate", "--max-batch-tokens", "8192",
+              "--max-client-batch-size", "64", "--tokenization-workers", "4",
+              "--max-concurrent-requests", "64"]
 
     volumes:
       - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
-      
+      # Change 1: overlay the already-downloaded int8 weights onto model.onnx.
+      # int8 is self-contained (no _data file); TEI's ORT backend always loads the
+      # file literally named onnx/model.onnx. Original files on disk are untouched.
+      - ./model-cache/bge-reranker-v2-m3-onnx/onnx/model_int8.onnx:/models/bge-reranker-v2-m3/onnx/model.onnx:ro
+
     ports: ["127.0.0.1:8002:80"]
 
     networks: [qfind-net]
