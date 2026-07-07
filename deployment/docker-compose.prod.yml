@@ -54,11 +54,13 @@ services:
     restart: unless-stopped
     environment:
       HF_HOME: /home/ubuntu/.cache/huggingface
-      CUDA_DEVICE_ORDER: PCI_BUS_ID
-      CUDA_VISIBLE_DEVICES: "1"        # A400 — dedicated, does not compete with vllm-chat on GPU 1
+      CUDA_DEVICE_ORDER: PCI_BUS_ID        # A400 — dedicated, does not compete with vllm-chat on GPU 1
       WHISPER__MODEL: Systran/faster-whisper-large-v3
       WHISPER__INFERENCE_DEVICE: cuda
       WHISPER__COMPUTE_TYPE: float16
+      WHISPER__USE_BATCHED_MODE: "true"   # NEW — biggest lever: parallel VAD-chunk decoding instead of one segment at a time. This is what will actually use the 5090.
+      STT_MODEL_TTL: "-1"                 # NEW — never unload between jobs; avoids reload latency on the next transcription
+      PRELOAD_MODELS: '["Systran/faster-whisper-large-v3"]'   # NEW — model is loaded and warm at container start, not on first request
     volumes:
       - ./model-cache/hub:/home/ubuntu/.cache/huggingface/hub:ro
     ports:
@@ -67,7 +69,9 @@ services:
       resources:
         reservations:
           devices:
-            - { driver: nvidia, count: all, capabilities: [gpu] }
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]   # tightened from "all" — CUDA_VISIBLE_DEVICES already restricts to GPU 1, so match the reservation to what's actually used
     networks: [qfind-net]
 
   tei-embed:
