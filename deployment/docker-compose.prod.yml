@@ -74,6 +74,29 @@ services:
               capabilities: [gpu]   # tightened from "all" — CUDA_VISIBLE_DEVICES already restricts to GPU 1, so match the reservation to what's actually used
     networks: [qfind-net]
 
+  stt-fastwhisper:
+    build: ./stt-fastwhisper
+    restart: unless-stopped
+    environment:
+      HF_HOME: /home/ubuntu/.cache/huggingface   # /home/ubuntu (not /root) — matches stt-whisper; /root caused docker access problems before
+      CUDA_DEVICE_ORDER: PCI_BUS_ID       # match stt-whisper; GPU is selected via device_ids below, NOT CUDA_VISIBLE_DEVICES
+      FW_MODEL: large-v3                  # resolves to Systran/faster-whisper-large-v3 — same repo/cache as speaches
+      FW_DEVICE: cuda
+      FW_COMPUTE_TYPE: float16
+      FW_BATCH_SIZE: "16"                 # default batch size; overridable per-request via the form body
+    volumes:
+      - ./model-cache/hub:/home/ubuntu/.cache/huggingface/hub:ro   # reuse the already-downloaded large-v3 cache; same mount path as speaches, :ro
+    ports:
+      - "127.0.0.1:8004:8000"          # loopback only, same pattern as vLLM/speaches — LiteLLM reaches it via qfind-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]         # same single mechanism as stt-whisper — do NOT also set CUDA_VISIBLE_DEVICES
+              capabilities: [gpu]
+    networks: [qfind-net]
+
   tei-embed:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
       
