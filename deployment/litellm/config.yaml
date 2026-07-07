@@ -20,7 +20,7 @@ model_list:
   - model_name: qfind-stt
     litellm_params:
       model: openai/Systran/faster-whisper-large-v3
-      api_base: http://stt-whisper:8000/v1
+      api_base: http://stt-fastwhisper:8000/v1   # was http://stt-whisper:8000/v1 (speaches) — now the dedicated faster-whisper service
       api_key: "none"
 
 general_settings:
