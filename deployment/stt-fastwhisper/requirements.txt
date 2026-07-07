@@ -1,0 +1,9 @@
+# Pinned for the cuda-12.6.3 + cuDNN 9 base image.
+# ctranslate2 >= 4.5.0 is the cuDNN-9 build line (4.4.x linked cuDNN 8),
+# which matches the -cudnn-runtime- (cuDNN 9) base. faster-whisper 1.1.1
+# requires ctranslate2 >= 4.4, so 4.5.0 satisfies it.
+faster-whisper==1.1.1
+ctranslate2==4.5.0
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
