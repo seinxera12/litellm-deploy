@@ -30,14 +30,15 @@ services:
     environment:
       CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_VISIBLE_DEVICES: "1"
-    command: >
-      --model /models/qwen2.5-7b-instruct
-      --quantization fp8    
-      --served-model-name qfind-chat
-      --gpu-memory-utilization 0.55
-      --max-model-len 16384
-      --tensor-parallel-size 1
-      --enable-prefix-caching
+    command: [
+      "--model", "/models/qwen2.5-7b-instruct",
+      "--quantization", "fp8",
+      "--served-model-name", "qfind-chat",
+      "--gpu-memory-utilization", "0.55",
+      "--max-model-len", "16384",
+      "--tensor-parallel-size", "1",
+      "--enable-prefix-caching"
+    ]
     volumes:
       - ./model-cache/qwen2.5-7b-instruct:/models/qwen2.5-7b-instruct:ro
     ports:
@@ -55,15 +56,17 @@ services:
     environment:
       CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_VISIBLE_DEVICES: "1"
-    command: >
-      --model /models/bge-m3
-      --task embed
-      --served-model-name qfind-embed
-      --dtype float16
-      --gpu-memory-utilization 0.11
-      --max-model-len 8192
-      --max-num-seqs 128               # client sends batches of 64; 128 lets 2 land at once
-      --enforce-eager
+    # --max-num-seqs 128: client sends batches of 64; 128 lets 2 land at once
+    command: [
+      "--model", "/models/bge-m3",
+      "--task", "embed",
+      "--served-model-name", "qfind-embed",
+      "--dtype", "float16",
+      "--gpu-memory-utilization", "0.11",
+      "--max-model-len", "8192",
+      "--max-num-seqs", "128",
+      "--enforce-eager"
+    ]
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
     ports: ["127.0.0.1:8005:8000"]
@@ -76,15 +79,18 @@ services:
     environment:
       CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_VISIBLE_DEVICES: "1"
-    command: >
-      --model /models/bge-reranker-v2-m3     # safetensors dir, NOT the -onnx dir
-      --task score
-      --served-model-name qfind-rerank
-      --dtype float16
-      --gpu-memory-utilization 0.09
-      --max-model-len 8192
-      --max-num-seqs 128               # ~one query's candidate set (top-K pairs) at once
-      --enforce-eager
+    # model path is the safetensors dir, NOT the -onnx dir (vLLM can't load ONNX)
+    # --max-num-seqs 128: ~one query's candidate set (top-K pairs) at once
+    command: [
+      "--model", "/models/bge-reranker-v2-m3",
+      "--task", "score",
+      "--served-model-name", "qfind-rerank",
+      "--dtype", "float16",
+      "--gpu-memory-utilization", "0.09",
+      "--max-model-len", "8192",
+      "--max-num-seqs", "128",
+      "--enforce-eager"
+    ]
     volumes:
       - ./model-cache/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
     ports: ["127.0.0.1:8006:8000"]
