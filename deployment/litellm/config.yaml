@@ -5,16 +5,30 @@ model_list:
       api_base: http://vllm-chat:8000/v1
       api_key: "none"                # self-hosted, no upstream key
 
+  # Profile-gated 14B A/B variants (docker-compose profiles chat-14b / chat-awq).
+  # Inert unless their backend is running — only one chat model fits in VRAM at a time.
+  - model_name: qfind-chat-14b
+    litellm_params:
+      model: openai/qfind-chat-14b
+      api_base: http://vllm-chat-14b:8000/v1
+      api_key: "none"
+
+  - model_name: qfind-chat-awq
+    litellm_params:
+      model: openai/qfind-chat-awq
+      api_base: http://vllm-chat-awq:8000/v1
+      api_key: "none"
+
   - model_name: qfind-embed
     litellm_params:
       model: openai/qfind-embed
-      api_base: http://tei-embed:80
+      api_base: http://vllm-embed:8000/v1
       api_key: "none"
 
   - model_name: qfind-rerank
     litellm_params:
-      model: huggingface/qfind-rerank
-      api_base: http://tei-rerank:80
+      model: hosted_vllm/qfind-rerank
+      api_base: http://vllm-rerank:8000
       api_key: "none"
 
   - model_name: qfind-stt

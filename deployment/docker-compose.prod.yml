@@ -30,16 +30,17 @@ services:
     environment:
       CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_VISIBLE_DEVICES: "1"
-    command: >
-      --model /models/qwen2.5-14b-instruct
-      --quantization fp8    
-      --served-model-name qfind-chat
-      --gpu-memory-utilization 0.70
-      --max-model-len 16384
-      --tensor-parallel-size 1
-      --enable-prefix-caching
+    command: [
+      "--model", "/models/qwen2.5-7b-instruct",
+      "--quantization", "fp8",
+      "--served-model-name", "qfind-chat",
+      "--gpu-memory-utilization", "0.55",
+      "--max-model-len", "16384",
+      "--tensor-parallel-size", "1",
+      "--enable-prefix-caching"
+    ]
     volumes:
-      - ./model-cache/qwen2.5-14b-instruct:/models/qwen2.5-14b-instruct:ro
+      - ./model-cache/qwen2.5-7b-instruct:/models/qwen2.5-7b-instruct:ro
     ports:
       - "127.0.0.1:8000:8000"   # bind to loopback only — Caddy/LiteLLM reach it via qfind-net
     deploy:
@@ -49,29 +50,108 @@ services:
             - { driver: nvidia, count: all, capabilities: [gpu] }
     networks: [qfind-net]
 
-  stt-whisper:
-    image: ghcr.io/speaches-ai/speaches:latest-cuda-12.6.3   # verify tag per the note above
+  vllm-embed:
+    image: vllm/vllm-openai:v0.17.0
     restart: unless-stopped
     environment:
-      HF_HOME: /home/ubuntu/.cache/huggingface
-      CUDA_DEVICE_ORDER: PCI_BUS_ID        # A400 — dedicated, does not compete with vllm-chat on GPU 1
-      WHISPER__MODEL: Systran/faster-whisper-large-v3
-      WHISPER__INFERENCE_DEVICE: cuda
-      WHISPER__COMPUTE_TYPE: float16
-      WHISPER__USE_BATCHED_MODE: "true"   # NEW — biggest lever: parallel VAD-chunk decoding instead of one segment at a time. This is what will actually use the 5090.
-      STT_MODEL_TTL: "-1"                 # NEW — never unload between jobs; avoids reload latency on the next transcription
-      PRELOAD_MODELS: '["Systran/faster-whisper-large-v3"]'   # NEW — model is loaded and warm at container start, not on first request
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    # --max-num-seqs 128: client sends batches of 64; 128 lets 2 land at once
+    command: [
+      "--model", "/models/bge-m3",
+      "--runner", "pooling",
+      "--served-model-name", "qfind-embed",
+      "--dtype", "float16",
+      "--gpu-memory-utilization", "0.11",
+      "--max-model-len", "8192",
+      "--max-num-seqs", "128",
+      "--enforce-eager"
+    ]
     volumes:
-      - ./model-cache/hub:/home/ubuntu/.cache/huggingface/hub:ro
-    ports:
-      - "127.0.0.1:8003:8000"          # loopback only, same pattern as vLLM/TEI — LiteLLM reaches it via qfind-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["1"]
-              capabilities: [gpu]   # tightened from "all" — CUDA_VISIBLE_DEVICES already restricts to GPU 1, so match the reservation to what's actually used
+      - ./model-cache/bge-m3:/models/bge-m3:ro
+    ports: ["127.0.0.1:8005:8000"]
+    # count: all + CUDA_VISIBLE_DEVICES="1" (matches vllm-chat). Do NOT use device_ids
+    # here together with CUDA_VISIBLE_DEVICES — that re-indexes the GPU to 0 and vLLM's
+    # lookup of device "1" then fails with NVMLError_InvalidArgument.
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+    networks: [qfind-net]
+
+  vllm-rerank:
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    # model path is the safetensors dir, NOT the -onnx dir (vLLM can't load ONNX)
+    # --max-num-seqs 128: ~one query's candidate set (top-K pairs) at once
+    command: [
+      "--model", "/models/bge-reranker-v2-m3",
+      "--runner", "pooling",
+      "--served-model-name", "qfind-rerank",
+      "--dtype", "float16",
+      "--gpu-memory-utilization", "0.09",
+      "--max-model-len", "8192",
+      "--max-num-seqs", "128",
+      "--enforce-eager"
+    ]
+    volumes:
+      - ./model-cache/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
+    ports: ["127.0.0.1:8006:8000"]
+    # count: all + CUDA_VISIBLE_DEVICES="1" (matches vllm-chat) — see note on vllm-embed.
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+    networks: [qfind-net]
+
+  # ── Chat A/B variants (profile-gated; run ONE at a time, with vllm-chat stopped) ──
+  # Dormant on a normal `up -d` (same mechanism as the cpu-fallback TEI services).
+  # Each fits only because the default 7B vllm-chat is stopped first to free ~16 GB.
+  vllm-chat-14b:
+    profiles: ["chat-14b"]
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    # 14B fp8 weights + fp8 KV cache. Tight KV (~3.6 GB) → mainly single-stream quality testing.
+    command: [
+      "--model", "/models/qwen2.5-14b-instruct",
+      "--quantization", "fp8",
+      "--kv-cache-dtype", "fp8",
+      "--served-model-name", "qfind-chat-14b",
+      "--gpu-memory-utilization", "0.58",
+      "--max-model-len", "16384",
+      "--max-num-seqs", "8",
+      "--tensor-parallel-size", "1",
+      "--enable-prefix-caching"
+    ]
+    volumes:
+      - ./model-cache/qwen2.5-14b-instruct:/models/qwen2.5-14b-instruct:ro
+    ports: ["127.0.0.1:8010:8000"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+    networks: [qfind-net]
+
+  vllm-chat-awq:
+    profiles: ["chat-awq"]
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    # AWQ int4 weights (self-declared in config → no --quantization) + fp8 KV cache.
+    # AWQ on Blackwell uses vLLM's Marlin kernel — verify it loads on sm120 on first start.
+    command: [
+      "--model", "/models/qwen2.5-14b-instruct-awq",
+      "--kv-cache-dtype", "fp8",
+      "--served-model-name", "qfind-chat-awq",
+      "--gpu-memory-utilization", "0.52",
+      "--max-model-len", "16384",
+      "--max-num-seqs", "16",
+      "--tensor-parallel-size", "1",
+      "--enable-prefix-caching"
+    ]
+    volumes:
+      - ./model-cache/qwen2.5-14b-instruct-awq:/models/qwen2.5-14b-instruct-awq:ro
+    ports: ["127.0.0.1:8011:8000"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
     networks: [qfind-net]
 
   stt-fastwhisper:
@@ -79,7 +159,7 @@ services:
     restart: unless-stopped
     environment:
       HF_HOME: /home/ubuntu/.cache/huggingface   # /home/ubuntu (not /root) — matches stt-whisper; /root caused docker access problems before
-      CUDA_DEVICE_ORDER: PCI_BUS_ID       # match stt-whisper; GPU is selected via device_ids below, NOT CUDA_VISIBLE_DEVICES
+      CUDA_DEVICE_ORDER: PCI_BUS_ID      
       FW_MODEL: large-v3                  # resolves to Systran/faster-whisper-large-v3 — same repo/cache as speaches
       FW_DEVICE: cuda
       FW_COMPUTE_TYPE: float16
@@ -98,25 +178,57 @@ services:
     networks: [qfind-net]
 
   tei-embed:
+    profiles: ["cpu-fallback"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
-      
-    command: ["--model-id", "/models/bge-m3"]
+    restart: unless-stopped
+
+    # Pin to CCD1 (frequency die, cores 8-15). Embed streams the full weight set
+    # each pass and won't fit any cache, so it prefers the higher clock. 8 physical
+    # cores only — SMT siblings (24-31) hurt dense GEMM.
+    cpuset: "8-15"
+    environment:
+      OMP_NUM_THREADS: "8"
+      RAYON_NUM_THREADS: "8"
+
+    command: ["--model-id", "/models/bge-m3",
+              "--auto-truncate", "--max-batch-tokens", "8192",
+              "--max-client-batch-size", "64", "--tokenization-workers", "4",
+              "--max-concurrent-requests", "64"]
 
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
-        
+      # NOTE: still fp32 ONNX. int8 (Change 2) is a follow-up — generate with
+      # optimum-cli, then overlay ./model-cache/bge-m3/onnx-int8/model.onnx here.
+
     ports: ["127.0.0.1:8001:80"]
 
     networks: [qfind-net]
 
   tei-rerank:
+    profiles: ["cpu-fallback"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    restart: unless-stopped
 
-    command: ["--model-id", "/models/bge-reranker-v2-m3"]
+    # Pin to CCD0 (3D V-cache die, cores 0-7). The cross-encoder is memory-bound and
+    # benefits most from the 96 MB L3. Verify CCD0 is the V-cache die with `lscpu -C`
+    # (larger L3); if it's CCD1, swap this cpuset with tei-embed's.
+    cpuset: "0-7"
+    environment:
+      OMP_NUM_THREADS: "8"
+      RAYON_NUM_THREADS: "8"
+
+    command: ["--model-id", "/models/bge-reranker-v2-m3",
+              "--auto-truncate", "--max-batch-tokens", "8192",
+              "--max-client-batch-size", "64", "--tokenization-workers", "4",
+              "--max-concurrent-requests", "64"]
 
     volumes:
       - ./model-cache/bge-reranker-v2-m3-onnx:/models/bge-reranker-v2-m3:ro
-      
+      # Change 1: overlay the already-downloaded int8 weights onto model.onnx.
+      # int8 is self-contained (no _data file); TEI's ORT backend always loads the
+      # file literally named onnx/model.onnx. Original files on disk are untouched.
+      - ./model-cache/bge-reranker-v2-m3-onnx/onnx/model_int8.onnx:/models/bge-reranker-v2-m3/onnx/model.onnx:ro
+
     ports: ["127.0.0.1:8002:80"]
 
     networks: [qfind-net]
