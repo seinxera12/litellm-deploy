@@ -101,6 +101,59 @@ services:
     deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
     networks: [qfind-net]
 
+  # ── Chat A/B variants (profile-gated; run ONE at a time, with vllm-chat stopped) ──
+  # Dormant on a normal `up -d` (same mechanism as the cpu-fallback TEI services).
+  # Each fits only because the default 7B vllm-chat is stopped first to free ~16 GB.
+  vllm-chat-14b:
+    profiles: ["chat-14b"]
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    # 14B fp8 weights + fp8 KV cache. Tight KV (~3.6 GB) → mainly single-stream quality testing.
+    command: [
+      "--model", "/models/qwen2.5-14b-instruct",
+      "--quantization", "fp8",
+      "--kv-cache-dtype", "fp8",
+      "--served-model-name", "qfind-chat-14b",
+      "--gpu-memory-utilization", "0.58",
+      "--max-model-len", "16384",
+      "--max-num-seqs", "8",
+      "--tensor-parallel-size", "1",
+      "--enable-prefix-caching"
+    ]
+    volumes:
+      - ./model-cache/qwen2.5-14b-instruct:/models/qwen2.5-14b-instruct:ro
+    ports: ["127.0.0.1:8010:8000"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+    networks: [qfind-net]
+
+  vllm-chat-awq:
+    profiles: ["chat-awq"]
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    # AWQ int4 weights (self-declared in config → no --quantization) + fp8 KV cache.
+    # AWQ on Blackwell uses vLLM's Marlin kernel — verify it loads on sm120 on first start.
+    command: [
+      "--model", "/models/qwen2.5-14b-instruct-awq",
+      "--kv-cache-dtype", "fp8",
+      "--served-model-name", "qfind-chat-awq",
+      "--gpu-memory-utilization", "0.52",
+      "--max-model-len", "16384",
+      "--max-num-seqs", "16",
+      "--tensor-parallel-size", "1",
+      "--enable-prefix-caching"
+    ]
+    volumes:
+      - ./model-cache/qwen2.5-14b-instruct-awq:/models/qwen2.5-14b-instruct-awq:ro
+    ports: ["127.0.0.1:8011:8000"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+    networks: [qfind-net]
+
   stt-fastwhisper:
     build: ./stt-fastwhisper
     restart: unless-stopped
