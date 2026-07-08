@@ -70,7 +70,10 @@ services:
     volumes:
       - ./model-cache/bge-m3:/models/bge-m3:ro
     ports: ["127.0.0.1:8005:8000"]
-    deploy: { resources: { reservations: { devices: [{ driver: nvidia, device_ids: ["1"], capabilities: [gpu] }] } } }
+    # count: all + CUDA_VISIBLE_DEVICES="1" (matches vllm-chat). Do NOT use device_ids
+    # here together with CUDA_VISIBLE_DEVICES — that re-indexes the GPU to 0 and vLLM's
+    # lookup of device "1" then fails with NVMLError_InvalidArgument.
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
     networks: [qfind-net]
 
   vllm-rerank:
@@ -94,7 +97,8 @@ services:
     volumes:
       - ./model-cache/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
     ports: ["127.0.0.1:8006:8000"]
-    deploy: { resources: { reservations: { devices: [{ driver: nvidia, device_ids: ["1"], capabilities: [gpu] }] } } }
+    # count: all + CUDA_VISIBLE_DEVICES="1" (matches vllm-chat) — see note on vllm-embed.
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
     networks: [qfind-net]
 
   stt-fastwhisper:
