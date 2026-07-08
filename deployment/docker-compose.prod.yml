@@ -48,7 +48,11 @@ services:
         reservations:
           devices:
             - { driver: nvidia, count: all, capabilities: [gpu] }
-    networks: [qfind-net]
+    # shared alias so LiteLLM's single upstream (qfind-chat-upstream) resolves to whichever
+    # chat container is running — see vllm-chat-14b / vllm-chat-awq for the A/B variants.
+    networks:
+      qfind-net:
+        aliases: [qfind-chat-upstream]
 
   vllm-embed:
     image: vllm/vllm-openai:v0.17.0
@@ -127,7 +131,9 @@ services:
       - ./model-cache/qwen2.5-14b-instruct:/models/qwen2.5-14b-instruct:ro
     ports: ["127.0.0.1:8010:8000"]
     deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
-    networks: [qfind-net]
+    networks:
+      qfind-net:
+        aliases: [qfind-chat-upstream]
 
   vllm-chat-awq:
     profiles: ["chat-awq"]
@@ -152,7 +158,9 @@ services:
       - ./model-cache/qwen2.5-14b-instruct-awq:/models/qwen2.5-14b-instruct-awq:ro
     ports: ["127.0.0.1:8011:8000"]
     deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
-    networks: [qfind-net]
+    networks:
+      qfind-net:
+        aliases: [qfind-chat-upstream]
 
   stt-fastwhisper:
     build: ./stt-fastwhisper
