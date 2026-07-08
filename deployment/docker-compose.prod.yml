@@ -54,7 +54,7 @@ services:
     restart: unless-stopped
     environment:
       HF_HOME: /home/ubuntu/.cache/huggingface
-      CUDA_DEVICE_ORDER: PCI_BUS_ID        # A400 — dedicated, does not compete with vllm-chat on GPU 1
+      CUDA_DEVICE_ORDER: PCI_BUS_ID        
       WHISPER__MODEL: Systran/faster-whisper-large-v3
       WHISPER__INFERENCE_DEVICE: cuda
       WHISPER__COMPUTE_TYPE: float16
@@ -79,7 +79,7 @@ services:
     restart: unless-stopped
     environment:
       HF_HOME: /home/ubuntu/.cache/huggingface   # /home/ubuntu (not /root) — matches stt-whisper; /root caused docker access problems before
-      CUDA_DEVICE_ORDER: PCI_BUS_ID       # match stt-whisper; GPU is selected via device_ids below, NOT CUDA_VISIBLE_DEVICES
+      CUDA_DEVICE_ORDER: PCI_BUS_ID      
       FW_MODEL: large-v3                  # resolves to Systran/faster-whisper-large-v3 — same repo/cache as speaches
       FW_DEVICE: cuda
       FW_COMPUTE_TYPE: float16
