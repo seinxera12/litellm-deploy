@@ -1,22 +1,22 @@
 model_list:
+  # qfind-chat failover group — all three chat backends serve --served-model-name qfind-chat.
+  # Only one runs at a time (VRAM); background health checks (see general_settings) exclude the
+  # stopped backends, so the app keeps calling `qfind-chat` and reaches whichever is up.
+  # Swap models = docker compose up/down of the profile services; no client or config change.
   - model_name: qfind-chat
     litellm_params:
-      model: openai/qfind-chat       # the stable served name vLLM uses
-      api_base: http://vllm-chat:8000/v1
-      api_key: "none"                # self-hosted, no upstream key
-
-  # Profile-gated 14B A/B variants (docker-compose profiles chat-14b / chat-awq).
-  # Inert unless their backend is running — only one chat model fits in VRAM at a time.
-  - model_name: qfind-chat-14b
-    litellm_params:
-      model: openai/qfind-chat-14b
-      api_base: http://vllm-chat-14b:8000/v1
+      model: openai/qfind-chat
+      api_base: http://vllm-chat:8000/v1          # 7B fp8 (default, always-on)
       api_key: "none"
-
-  - model_name: qfind-chat-awq
+  - model_name: qfind-chat
     litellm_params:
-      model: openai/qfind-chat-awq
-      api_base: http://vllm-chat-awq:8000/v1
+      model: openai/qfind-chat
+      api_base: http://vllm-chat-14b:8000/v1       # 14B fp8 + fp8 KV (profile chat-14b)
+      api_key: "none"
+  - model_name: qfind-chat
+    litellm_params:
+      model: openai/qfind-chat
+      api_base: http://vllm-chat-awq:8000/v1       # 14B AWQ + fp8 KV (profile chat-awq)
       api_key: "none"
 
   - model_name: qfind-embed
@@ -41,3 +41,7 @@ general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
   store_model_in_db: true
+  # Probe each qfind-chat deployment periodically so stopped backends are marked unhealthy
+  # and excluded from routing — avoids per-request connection errors to the dormant variants.
+  background_health_checks: true
+  health_check_interval: 300

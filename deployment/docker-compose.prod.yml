@@ -116,7 +116,7 @@ services:
       "--model", "/models/qwen2.5-14b-instruct",
       "--quantization", "fp8",
       "--kv-cache-dtype", "fp8",
-      "--served-model-name", "qfind-chat-14b",
+      "--served-model-name", "qfind-chat",   # same served name as the 7B → drop-in for the qfind-chat group
       "--gpu-memory-utilization", "0.58",
       "--max-model-len", "16384",
       "--max-num-seqs", "8",
@@ -141,7 +141,7 @@ services:
     command: [
       "--model", "/models/qwen2.5-14b-instruct-awq",
       "--kv-cache-dtype", "fp8",
-      "--served-model-name", "qfind-chat-awq",
+      "--served-model-name", "qfind-chat",   # same served name as the 7B → drop-in for the qfind-chat group
       "--gpu-memory-utilization", "0.52",
       "--max-model-len", "16384",
       "--max-num-seqs", "16",
