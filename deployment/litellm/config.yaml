@@ -8,13 +8,13 @@ model_list:
   - model_name: qfind-embed
     litellm_params:
       model: openai/qfind-embed
-      api_base: http://tei-embed:80
+      api_base: http://vllm-embed:8000/v1
       api_key: "none"
 
   - model_name: qfind-rerank
     litellm_params:
-      model: huggingface/qfind-rerank
-      api_base: http://tei-rerank:80
+      model: hosted_vllm/qfind-rerank
+      api_base: http://vllm-rerank:8000
       api_key: "none"
 
   - model_name: qfind-stt

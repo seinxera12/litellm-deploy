@@ -31,15 +31,15 @@ services:
       CUDA_DEVICE_ORDER: PCI_BUS_ID
       CUDA_VISIBLE_DEVICES: "1"
     command: >
-      --model /models/qwen2.5-14b-instruct
+      --model /models/qwen2.5-7b-instruct
       --quantization fp8    
       --served-model-name qfind-chat
-      --gpu-memory-utilization 0.70
+      --gpu-memory-utilization 0.55
       --max-model-len 16384
       --tensor-parallel-size 1
       --enable-prefix-caching
     volumes:
-      - ./model-cache/qwen2.5-14b-instruct:/models/qwen2.5-14b-instruct:ro
+      - ./model-cache/qwen2.5-7b-instruct:/models/qwen2.5-7b-instruct:ro
     ports:
       - "127.0.0.1:8000:8000"   # bind to loopback only — Caddy/LiteLLM reach it via qfind-net
     deploy:
@@ -49,29 +49,46 @@ services:
             - { driver: nvidia, count: all, capabilities: [gpu] }
     networks: [qfind-net]
 
-  stt-whisper:
-    image: ghcr.io/speaches-ai/speaches:latest-cuda-12.6.3   # verify tag per the note above
+  vllm-embed:
+    image: vllm/vllm-openai:v0.17.0
     restart: unless-stopped
     environment:
-      HF_HOME: /home/ubuntu/.cache/huggingface
-      CUDA_DEVICE_ORDER: PCI_BUS_ID        
-      WHISPER__MODEL: Systran/faster-whisper-large-v3
-      WHISPER__INFERENCE_DEVICE: cuda
-      WHISPER__COMPUTE_TYPE: float16
-      WHISPER__USE_BATCHED_MODE: "true"   # NEW — biggest lever: parallel VAD-chunk decoding instead of one segment at a time. This is what will actually use the 5090.
-      STT_MODEL_TTL: "-1"                 # NEW — never unload between jobs; avoids reload latency on the next transcription
-      PRELOAD_MODELS: '["Systran/faster-whisper-large-v3"]'   # NEW — model is loaded and warm at container start, not on first request
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    command: >
+      --model /models/bge-m3
+      --task embed
+      --served-model-name qfind-embed
+      --dtype float16
+      --gpu-memory-utilization 0.11
+      --max-model-len 8192
+      --max-num-seqs 128               # client sends batches of 64; 128 lets 2 land at once
+      --enforce-eager
     volumes:
-      - ./model-cache/hub:/home/ubuntu/.cache/huggingface/hub:ro
-    ports:
-      - "127.0.0.1:8003:8000"          # loopback only, same pattern as vLLM/TEI — LiteLLM reaches it via qfind-net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["1"]
-              capabilities: [gpu]   # tightened from "all" — CUDA_VISIBLE_DEVICES already restricts to GPU 1, so match the reservation to what's actually used
+      - ./model-cache/bge-m3:/models/bge-m3:ro
+    ports: ["127.0.0.1:8005:8000"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, device_ids: ["1"], capabilities: [gpu] }] } } }
+    networks: [qfind-net]
+
+  vllm-rerank:
+    image: vllm/vllm-openai:v0.17.0
+    restart: unless-stopped
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUDA_VISIBLE_DEVICES: "1"
+    command: >
+      --model /models/bge-reranker-v2-m3     # safetensors dir, NOT the -onnx dir
+      --task score
+      --served-model-name qfind-rerank
+      --dtype float16
+      --gpu-memory-utilization 0.09
+      --max-model-len 8192
+      --max-num-seqs 128               # ~one query's candidate set (top-K pairs) at once
+      --enforce-eager
+    volumes:
+      - ./model-cache/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
+    ports: ["127.0.0.1:8006:8000"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, device_ids: ["1"], capabilities: [gpu] }] } } }
     networks: [qfind-net]
 
   stt-fastwhisper:
@@ -98,6 +115,7 @@ services:
     networks: [qfind-net]
 
   tei-embed:
+    profiles: ["cpu-fallback"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
     restart: unless-stopped
 
@@ -124,6 +142,7 @@ services:
     networks: [qfind-net]
 
   tei-rerank:
+    profiles: ["cpu-fallback"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
     restart: unless-stopped
 
